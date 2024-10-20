@@ -1,96 +1,113 @@
 import os
-import re
-from collections import Counter
 import socket
+from collections import Counter
 
-def read_file(filepath):
+def expand_contractions(text):
+    contractions_dict = {
+        "I'm": "I am",
+        "I'll": "I will",
+        "can't": "cannot",
+        "couldn't": "could not",
+        "won't": "will not",
+        "don't": "do not",
+        "you're": "you are",
+        "wanna": "want to",
+        "that's": "that is",
+        "it's": "it is",
+    }
+
+    for contraction, full_form in contractions_dict.items():
+        text = text.replace(contraction, full_form)
+    
+    return text
+
+def process_file_content(file_path, split_contractions_flag=False):
     try:
-        with open(filepath, 'r', encoding='utf-8') as file:
+        with open(file_path, 'r') as file:
             text = file.read()
-        return text
+
+        total_words_before_split = len(text.split())
+
+        if split_contractions_flag:
+            text = expand_contractions(text)
+
+        words = text.split()
+
+        word_counts = Counter(words)
+
+        return total_words_before_split, word_counts
+
+    except FileNotFoundError as e:
+        print(f"File not found: {file_path}")
+        return 0, Counter()
     except Exception as e:
-        print(f"Error reading file {filepath}: {e}")
-        return ""
+        print(f"Error processing file {file_path}: {e}")
+        return 0, Counter()
 
-def split_words(text, handle_contractions=False):
-    if handle_contractions:
-        text = re.sub(r"[’']", " ", text)
-    words = re.findall(r'\b\w+\b', text.lower(), re.UNICODE)
-    return words
+def write_results_to_file(results):
+    output_dir = '/home/data/output'
 
-def count_words(words):
-    return len(words)
+    os.makedirs(output_dir, exist_ok=True)
+    
+    result_file_path = os.path.join(output_dir, 'result.txt')
 
-def top_n_words(words, n=3):
-    word_counts = Counter(words)
-    return word_counts.most_common(n)
+    try:
+        with open(result_file_path, 'w') as result_file:
+            result_file.write(results)
+        print(f"Results written to {result_file_path}") 
+    except Exception as e:
+        print(f"Error writing results: {e}")
+
+    return result_file_path
 
 def get_ip_address():
     try:
-        hostname = socket.gethostname()
-        ip_address = socket.gethostbyname(hostname)
-        return ip_address
+        return socket.gethostbyname(socket.gethostname())
     except Exception as e:
         print(f"Error getting IP address: {e}")
         return "Unknown"
 
 def main():
     try:
-        # Paths to the text files
-        file1_path = '/home/data/IF.txt'
-        file2_path = '/home/data/AlwaysRememberUsThisWay.txt'
+        if_file_path = '/home/data/IF.txt' 
+        always_remember_file_path = '/home/data/AlwaysRememberUsThisWay.txt'  # Path to AlwaysRememberUsThisWay.txt inside the container
 
-        # Read files
-        text1 = read_file(file1_path)
-        text2 = read_file(file2_path)
+        total_words_if, word_counts_if = process_file_content(if_file_path)
+        top_3_if = word_counts_if.most_common(3)
 
-        # Process files
-        words1 = split_words(text1)
-        words2 = split_words(text2, handle_contractions=True)
+        total_words_always_remember_before, word_counts_always_remember = process_file_content(always_remember_file_path, split_contractions_flag=True)
+        top_3_always_remember = word_counts_always_remember.most_common(3)
 
-        # Count total words in each file
-        total_words_file1 = count_words(words1)
-        total_words_file2 = count_words(words2)
+        grand_total_words = total_words_if + total_words_always_remember_before
 
-        # Calculate grand total
-        grand_total_words = total_words_file1 + total_words_file2
-
-        # Get top 3 frequent words in each file
-        top3_file1 = top_n_words(words1, 3)
-        top3_file2 = top_n_words(words2, 3)
-
-        # Get IP address
         ip_address = get_ip_address()
 
-        # Prepare the result string
-        result = (
-            f"Total words in IF.txt: {total_words_file1}\n"
-            f"Total words in AlwaysRememberUsThisWay.txt: {total_words_file2}\n"
-            f"Grand total of words: {grand_total_words}\n\n"
-            f"Top 3 words in IF.txt:\n"
+        results = (
+            "Results for IF.txt:\n"
+            f"Total words: {total_words_if}\n"
+            "Top 3 most frequent words:\n"
         )
+        for word, count in top_3_if:
+            results += f"{word}: {count}\n"
 
-        for word, count in top3_file1:
-            result += f"- {word}: {count}\n"
+        results += (
+            "\nResults for AlwaysRememberUsThisWay.txt:\n"
+            f"Total words before splitting contractions: {total_words_always_remember_before}\n"
+            "Top 3 most frequent words:\n"
+        )
+        for word, count in top_3_always_remember:
+            results += f"{word}: {count}\n"
 
-        result += "\nTop 3 words in AlwaysRememberUsThisWay.txt:\n"
+        results += f"\nGrand total of words across both files: {grand_total_words}\n"
+        results += f"IP Address of the container: {ip_address}\n"
 
-        for word, count in top3_file2:
-            result += f"- {word}: {count}\n"
+        result_file_path = write_results_to_file(results)
 
-        result += f"\nIP Address of the machine running the container: {ip_address}\n"
+        with open(result_file_path, 'r') as result_file:
+            print(result_file.read())
 
-        # Write results to result.txt
-        output_dir = '/home/data/output'
-        os.makedirs(output_dir, exist_ok=True)
-        output_path = os.path.join(output_dir, 'result.txt')
-
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(result)
-
-        print(result)
     except Exception as e:
         print(f"An error occurred: {e}")
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
